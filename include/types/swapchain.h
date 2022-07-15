@@ -27,12 +27,16 @@ struct swapchain {
 int swapchain_init(struct device *device, struct plane *plane,
                    unsigned int width, unsigned int height,
                    enum renderer_type renderer_type, struct swapchain *swapchain);
+// Sets one of framebuffers as "acquired" and eturns pointer to it.
 struct framebuffer **swapchain_acquire_framebuffer(struct swapchain *swapchain);
+// Moves source framebuffer to destination framebuffer and returns pointer to
+// destination framebuffer which can be used in the future.
 struct framebuffer **swapchain_move_framebuffer(struct swapchain *swapchain,
                                                 struct framebuffer **dst_fb,
                                                 struct framebuffer **src_fb);
 
 void swapchain_deinit(struct swapchain *swapchain);
+// Returns framebuffer to swapchain if it was acquired from it.
 void swapchain_release_framebuffer(struct swapchain *swapchain, struct framebuffer **fb);
 
 
