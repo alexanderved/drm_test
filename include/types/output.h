@@ -16,7 +16,7 @@ struct output {
 
 int output_init(struct device *device, struct connector *connector, struct output *output);
 int output_render(struct output *output);
-int output_repaint(struct output *output);
+int output_repaint(struct output *output, drmModeAtomicReqPtr req);
 
 void output_deinit(struct output *output);
 

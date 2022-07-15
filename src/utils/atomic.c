@@ -10,18 +10,32 @@ static void atomic_page_flip_handler(UNUSED int fd,
                           UNUSED unsigned int sequence,
                           UNUSED unsigned int tv_sec,
                           UNUSED unsigned int tv_usec,
-                          UNUSED unsigned int crtc_id,
+                          unsigned int crtc_id,
                           void *user_data)
 {
-    struct output *output = user_data;
-    struct swapchain *swapchain = NULL;
+    struct device *device = user_data;
+    struct output *output = NULL;
+    struct plane *primary_plane = NULL;
 
-    if (!output->connector || !output->connector->crtc) return;
+    dt_array_for_each(&device->output_array, struct output, tmp_output) {
+        if (!tmp_output->connector || !tmp_output->connector->crtc) continue;
 
-    swapchain = &output->connector->crtc->plane_set.primary->swapchain;
+        if (tmp_output->connector->crtc->crtc_id == crtc_id) {
+            output = tmp_output;
+            break;
+        }
+    }
 
-    swapchain_release_framebuffer(swapchain, &swapchain->last_fb);
-    swapchain_move_framebuffer(swapchain, &swapchain->last_fb, &swapchain->pending_fb);
+    if (!output) return;
+
+    output->needs_repaint = true;
+
+    primary_plane = output->connector->crtc->plane_set.primary;
+
+    swapchain_release_framebuffer(&primary_plane->swapchain, &primary_plane->swapchain.presented_fb);
+    primary_plane->plane_state.fb = swapchain_move_framebuffer(
+            &primary_plane->swapchain, &primary_plane->swapchain.presented_fb,
+            &primary_plane->swapchain.commited_fb);
 }
 
 int atomic_add(drmModeAtomicReqPtr req, uint32_t object_id,
@@ -38,23 +52,16 @@ int atomic_add(drmModeAtomicReqPtr req, uint32_t object_id,
     return 0;
 }
 
-int atomic_commit(struct output *output, drmModeAtomicReqPtr req) {
+int atomic_commit(struct device *device, drmModeAtomicReqPtr req, bool allow_modset) {
     uint32_t flags = DRM_MODE_ATOMIC_NONBLOCK | DRM_MODE_PAGE_FLIP_EVENT;
     int error = 0;
-    struct swapchain *swapchain = NULL;
-    struct plane_set *plane_set = NULL;
 
-    if (!output) return 1;
+    if (!device) return 1;
 
-    error = drmModeAtomicCommit(output->device->kms_fd, req,
-                                DRM_MODE_ATOMIC_ALLOW_MODESET | flags, output);
+    if (allow_modset)
+        flags |= DRM_MODE_ATOMIC_ALLOW_MODESET;
 
-    if (!output->connector || !output->connector->crtc) return 1;
-
-    swapchain = &output->connector->crtc->plane_set.primary->swapchain;
-    plane_set = &output->connector->crtc->plane_set;
-    swapchain_move_framebuffer(swapchain, &swapchain->pending_fb,
-                               plane_set->primary->plane_state.fb);
+    error = drmModeAtomicCommit(device->kms_fd, req, flags, device);
 
     return error;
 }
@@ -76,8 +83,13 @@ int atomic_event_handle(struct device *device) {
 
     error = poll(&poll_fd, 1, 0);
 
-    if (poll_fd.revents & POLLIN)
+    if (poll_fd.revents & POLLIN) {
+        printf("Pollin' :)\t");
+
         error = drmHandleEvent(device->kms_fd, &evctx);
+    } else {
+        printf("No pollin' :(\t");
+    }
 
     return error;
 }

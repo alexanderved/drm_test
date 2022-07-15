@@ -52,45 +52,32 @@ int output_init(struct device *device, struct connector *connector, struct outpu
 
 int output_render(struct output *output) {
     struct plane *primary_plane = NULL;
-    struct mode *mode = NULL;
     struct framebuffer **fb = NULL;
 
     if (!output || !output->connector || !output->connector->crtc) return 1;
 
     primary_plane = output->connector->crtc->plane_set.primary;
-    mode = output->connector->crtc->crtc_state.mode;
-
-    fb = swapchain_acquire_framebuffer(&primary_plane->swapchain);
-    if (!fb) {
-        fprintf(stderr, "Couldn't find free framebuffer\n");
+    if (plane_update_state(primary_plane, 0, 0) != 0) {
+        fprintf(stderr, "Couldn't update plane %u state\n", primary_plane->plane_id);
 
         return 1;
     }
+
+    fb = primary_plane->plane_state.fb;
     (*fb)->impl->fill(*fb);
-
-    primary_plane->plane_state.fb = fb;
-
-    primary_plane->plane_state.src_x = 0;
-    primary_plane->plane_state.src_y = 0;
-    primary_plane->plane_state.src_w = (*fb)->width << 16;
-    primary_plane->plane_state.src_h = (*fb)->height << 16;
-
-    primary_plane->plane_state.crtc_x = 0;
-    primary_plane->plane_state.crtc_y = 0;
-    primary_plane->plane_state.crtc_w = mode->mode_info.hdisplay;
-    primary_plane->plane_state.crtc_h = mode->mode_info.vdisplay;
 
     return 0;
 }
 
-int output_repaint(struct output *output) {
+int output_repaint(struct output *output, drmModeAtomicReqPtr req) {
     struct connector *connector = NULL;
     struct crtc *crtc = NULL;
     struct plane_set *plane_set = NULL;
-    drmModeAtomicReqPtr req = NULL;
+    struct swapchain *swapchain = NULL;
     int error = 0;
 
     if (!output || !output->connector || !output->connector->crtc) return 1;
+    if (!output->needs_repaint) return 0;
 
     if (output_render(output) != 0) {
         fprintf(stderr, "Couldn't render output\n");
@@ -102,18 +89,17 @@ int output_repaint(struct output *output) {
     crtc = connector->crtc;
     plane_set = &crtc->plane_set;
 
-    req = drmModeAtomicAlloc();
-
     error |= plane_apply_state(plane_set->primary, req);
     error |= crtc_apply_state(crtc, req);
     error |= atomic_add(req, connector->connector_id,
                         &connector->connector_properties[CONNECTOR_CRTC_ID],
                         connector->crtc->crtc_id);
 
-    atomic_commit(output, req);
+    swapchain = &plane_set->primary->swapchain;
+    plane_set->primary->plane_state.fb = swapchain_move_framebuffer(
+            swapchain, &swapchain->commited_fb, plane_set->primary->plane_state.fb);
 
-
-    drmModeAtomicFree(req);
+    output->needs_repaint = false;
 
     return error;
 }

@@ -38,25 +38,27 @@ struct framebuffer **swapchain_acquire_framebuffer(struct swapchain *swapchain) 
 
     for (int i = 0; i < COUNT_FRAMEBUFFERS; i++) {
         if (swapchain->fbs[i]) {
-            swapchain_move_framebuffer(swapchain, &swapchain->queued_fb, &swapchain->fbs[i]);
-
-            return &swapchain->queued_fb;
+            return swapchain_move_framebuffer(swapchain, &swapchain->acquired_fb,
+                                              &swapchain->fbs[i]);
         }
     }
 
     return NULL;
 }
 
-void swapchain_move_framebuffer(struct swapchain *swapchain,
-                                struct framebuffer **dst_fb, struct framebuffer **src_fb)
+struct framebuffer **swapchain_move_framebuffer(struct swapchain *swapchain,
+                                                struct framebuffer **dst_fb,
+                                                struct framebuffer **src_fb)
 {
-    if (!dst_fb || !src_fb) return;
+    if (!dst_fb || !src_fb) return NULL;
 
     if (*dst_fb)
         swapchain_release_framebuffer(swapchain, dst_fb);
 
     *dst_fb = *src_fb;
     *src_fb = NULL;
+
+    return dst_fb;
 }
 
 void swapchain_deinit(struct swapchain *swapchain) {
@@ -67,12 +69,12 @@ void swapchain_deinit(struct swapchain *swapchain) {
             swapchain->fbs[i]->impl->destroy(&swapchain->fbs[i]);
     }
 
-    if (swapchain->queued_fb)
-        swapchain->queued_fb->impl->destroy(&swapchain->queued_fb);
-    if (swapchain->pending_fb)
-        swapchain->pending_fb->impl->destroy(&swapchain->pending_fb);
-    if (swapchain->last_fb)
-        swapchain->last_fb->impl->destroy(&swapchain->last_fb);
+    if (swapchain->acquired_fb)
+        swapchain->acquired_fb->impl->destroy(&swapchain->acquired_fb);
+    if (swapchain->commited_fb)
+        swapchain->commited_fb->impl->destroy(&swapchain->commited_fb);
+    if (swapchain->presented_fb)
+        swapchain->presented_fb->impl->destroy(&swapchain->presented_fb);
 
     memset(swapchain, 0, sizeof(*swapchain));
 }

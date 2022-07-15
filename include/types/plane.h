@@ -60,6 +60,7 @@ struct plane_set {
     struct dt_array overlay; // struct plane *
 };
 
+int plane_update_state(struct plane *plane, int32_t crtc_x, int32_t crtc_y);
 int plane_apply_state(struct plane *plane, drmModeAtomicReqPtr req);
 
 int plane_init(struct device *device, uint32_t plane_id, struct plane *plane);

@@ -34,6 +34,33 @@ const struct property_info plane_properties[] = {
     [PLANE_IN_FENCE_FD] = { .name = "IN_FENCE_FD" },
 };
 
+int plane_update_state(struct plane *plane, int32_t crtc_x, int32_t crtc_y) {
+    struct framebuffer **fb = NULL;
+
+    if (!plane || crtc_x < 0 || crtc_y < 0) return 1;
+
+    fb = swapchain_acquire_framebuffer(&plane->swapchain);
+    if (!fb) {
+        fprintf(stderr, "Couldn't find free framebuffer\n");
+
+        return 1;
+    }
+
+    plane->plane_state.fb = fb;
+
+    plane->plane_state.src_x = 0;
+    plane->plane_state.src_y = 0;
+    plane->plane_state.src_w = (*fb)->width << 16;
+    plane->plane_state.src_h = (*fb)->height << 16;
+
+    plane->plane_state.crtc_x = crtc_x;
+    plane->plane_state.crtc_y = crtc_y;
+    plane->plane_state.crtc_w = (*fb)->width;
+    plane->plane_state.crtc_h = (*fb)->height;
+
+    return 0;
+}
+
 int plane_apply_state(struct plane *plane, drmModeAtomicReqPtr req) {
     struct plane_state *plane_state = &plane->plane_state;
     int error = 0;

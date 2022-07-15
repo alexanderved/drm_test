@@ -10,11 +10,9 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
-struct output;
-
 int atomic_add(drmModeAtomicReqPtr req, uint32_t object_id,
                struct property_info *property, uint64_t value);
-int atomic_commit(struct output *output, drmModeAtomicReqPtr req);
+int atomic_commit(struct device *device, drmModeAtomicReqPtr req, bool allow_modset);
 int atomic_event_handle(struct device *device);
 
 

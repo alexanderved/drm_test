@@ -8,7 +8,7 @@
 #include <assert.h>
 #include <sys/mman.h>
 
-static uint32_t r = 0, g = 0, b = 0;
+static uint32_t r = 0, g = 0x70, b = 0;
 
 static void dumb_framebuffer_fill(struct framebuffer *fb) {
     struct dumb_framebuffer *dumb_fb = NULL;
@@ -18,26 +18,16 @@ static void dumb_framebuffer_fill(struct framebuffer *fb) {
 
     dumb_fb = container_of(fb, struct dumb_framebuffer, fb);
 
-    for (unsigned int y = 0; y < (fb->height / 2); y++) {
+    for (unsigned int y = 0; y < fb->height; y++) {
         pix = (uint32_t *)((uint8_t *)dumb_fb->mem + (y * fb->pitches[0]));
 
-        for (unsigned int x = 0; x < (fb->width / 2); x++) {
+        for (unsigned int x = 0; x < fb->width; x++) {
             *pix++ = (0xff << 24) | (r << 16) | (g << 8) | b;
         }
     }
 
-    //if (r != 30 && g != 75 && b != 225) {
-        //r += 14;
-        //r %= 0xff;
-
-        g += 1;
-        g %= 0xff;
-
-        //b += 3;
-        //b %= 0xff;
-
-        printf("%u %u %u\n", r, g, b);
-    //}
+    g += 1;
+    if (g > 0xff) g = 0x70;
 }
 
 static void dumb_framebuffer_destroy(struct framebuffer **fb) {

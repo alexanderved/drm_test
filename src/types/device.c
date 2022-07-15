@@ -101,12 +101,42 @@ static void vt_reset(struct device *device)
 	ioctl(device->vt_fd, KDSETMODE, KD_TEXT);
 }
 
+static int device_update_capabilities(struct device *device) {
+    uint64_t addfb2_modifiers;
+    int error = 0;
+
+    if (drmSetClientCap(device->kms_fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1) != 0) {
+        fprintf(stderr, "Setting DRM_CLIENT_CAP_UNIVERSAL_PLANES failed\n");
+
+        return 1;
+    }
+
+    if (drmSetClientCap(device->kms_fd, DRM_CLIENT_CAP_ATOMIC, 1) != 0) {
+        fprintf(stderr, "Setting DRM_CLIENT_CAP_ATOMIC failed\n");
+
+        return 1;
+    }
+
+    error = drmGetCap(device->kms_fd, DRM_CAP_ADDFB2_MODIFIERS, &addfb2_modifiers);
+    device->supports_fb_modifiers = (error == 0 && addfb2_modifiers != 0);
+    printf("Device %s framebuffer modifiers\n",
+           device->supports_fb_modifiers ? "supports" : "not supports");
+
+    error = drmGetCap(device->kms_fd, DRM_CAP_CURSOR_WIDTH, &device->cursor_width);
+    if (error != 0 || device->cursor_width == 0)
+        device->cursor_width = BASE_CURSOR_WIDTH;
+
+    error = drmGetCap(device->kms_fd, DRM_CAP_CURSOR_HEIGHT, &device->cursor_height);
+    if (error != 0 || device->cursor_height == 0)
+        device->cursor_height = BASE_CURSOR_HEIGHT;
+
+    return 0;
+}
+
 static struct device *device_open(const char *filename) {
     struct device *device;
     drm_magic_t magic;
-    uint64_t capabilities;
-    int error;
-
+    
     device = calloc(1, sizeof(struct device));
     assert(device);
     
@@ -128,29 +158,12 @@ static struct device *device_open(const char *filename) {
         return NULL;
     }
 
-    if (drmSetClientCap(device->kms_fd, DRM_CLIENT_CAP_UNIVERSAL_PLANES, 1) != 0) {
-        fprintf(stderr, "Setting DRM_CLIENT_CAP_UNIVERSAL_PLANES failed\n");
+    if (device_update_capabilities(device) != 0) {
+        fprintf(stderr, "Couldn't update device capabilities\n");
         device_destroy(&device);
 
         return NULL;
     }
-
-    if (drmSetClientCap(device->kms_fd, DRM_CLIENT_CAP_ATOMIC, 1) != 0) {
-        fprintf(stderr, "Setting DRM_CLIENT_CAP_ATOMIC failed\n");
-        device_destroy(&device);
-
-        return NULL;
-    }
-
-    error = drmGetCap(device->kms_fd, DRM_CAP_ADDFB2_MODIFIERS, &capabilities);
-    device->supports_fb_modifiers = (error == 0 && capabilities != 0);
-    printf("Device %s framebuffer modifiers\n",
-           device->supports_fb_modifiers ? "supports" : "not supports");
-
-    if (drmGetCap(device->kms_fd, DRM_CAP_CURSOR_WIDTH, &device->cursor_width) != 0)
-        device->cursor_width = BASE_CURSOR_WIDTH;
-    if (drmGetCap(device->kms_fd, DRM_CAP_CURSOR_HEIGHT, &device->cursor_height) != 0)
-        device->cursor_height = BASE_CURSOR_HEIGHT;
 
     device->resources = drmModeGetResources(device->kms_fd);
     if (!device->resources) {
