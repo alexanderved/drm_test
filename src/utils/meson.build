@@ -1,0 +1,1 @@
+sources += files('dt_array.c', 'property.c', 'mode.c', 'atomic.c')
